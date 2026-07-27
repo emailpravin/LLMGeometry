@@ -1,12 +1,17 @@
 """
-Scores a blind response file against the trial manifest and reports
+Scores one blind response file against the trial manifest and reports
 per-shape error rates plus the correlation between shape regularity and
 error rate (the paper's own headline statistic, reproduced here for an AI
 subject instead of a human or baboon population).
 
+There are 10 independent runs per subject (data/claude_runs/run1..10,
+data/codex_runs/run1..10), all on the identical 220 trial images -- run 1
+is the original single-pass result, runs 2-10 exist to measure run-to-run
+variance (see analysis/multi_run_analysis.py for the combined view).
+
 Usage:
-    python3 score_responses.py claude   # scores data/responses_claude.json
-    python3 score_responses.py codex    # scores data/responses_codex.json
+    python3 score_responses.py claude       # scores data/claude_runs/run1/responses.json
+    python3 score_responses.py codex 5      # scores data/codex_runs/run5/responses.json
 """
 import json
 import sys
@@ -17,12 +22,14 @@ import numpy as np
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 subject = sys.argv[1] if len(sys.argv) > 1 else "claude"
-responses_file = DATA_DIR / f"responses_{subject}.json"
-scored_out = DATA_DIR / f"scored_trials_{subject}.json"
+run = sys.argv[2] if len(sys.argv) > 2 else "1"
+run_dir = DATA_DIR / f"{subject}_runs" / f"run{run}"
+responses_file = run_dir / "responses.json"
+scored_out = run_dir / "scored_trials.json"
 
 manifest = json.load(open(DATA_DIR / "manifest.json"))
 responses = json.load(open(responses_file))
-print(f"Scoring {responses_file.name} ({subject})\n")
+print(f"Scoring {subject} run {run} ({responses_file})\n")
 
 per_shape = defaultdict(lambda: {"correct": 0, "total": 0})
 regularity = {}

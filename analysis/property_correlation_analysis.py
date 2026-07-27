@@ -14,8 +14,11 @@ i.e. how close the shape's outline is to a circle).
 
 Requires: data/paper_source_data/{french_adults_2_mean_1st_response.csv,
 baboons_target.csv} (raw data from the paper's public OSF repository,
-osf.io/w5pzf) and data/scored_trials_{claude,codex}.json (this project's
-own AI results, produced by score_responses.py).
+osf.io/w5pzf) and data/{claude,codex}_runs/run{1..10}/scored_trials.json
+(this project's own AI results, produced by score_responses.py). Claude and
+Codex accuracy per shape is averaged across all 10 independent runs, not a
+single run -- see the README's "Why 10 runs" section for why a single run
+is too noisy to trust on its own.
 
 IMPORTANT NAMING NOTE: the paper's own OSF data uses "hinge" and
 "rustedHinge" as shape names, and it is easy to map them backwards onto
@@ -77,12 +80,14 @@ def load_human_baboon_accuracy():
     return human_acc, baboon_acc
 
 
-def load_ai_accuracy(subject):
-    rows = json.load(open(DATA_DIR / f"scored_trials_{subject}.json"))
+def load_ai_accuracy(subject, n_runs=10):
+    """Mean per-shape accuracy across all n_runs independent runs."""
     per_shape = defaultdict(lambda: {"correct": 0, "total": 0})
-    for r in rows:
-        per_shape[r["shape"]]["total"] += 1
-        per_shape[r["shape"]]["correct"] += r["correct_bool"]
+    for run in range(1, n_runs + 1):
+        rows = json.load(open(DATA_DIR / f"{subject}_runs" / f"run{run}" / "scored_trials.json"))
+        for r in rows:
+            per_shape[r["shape"]]["total"] += 1
+            per_shape[r["shape"]]["correct"] += r["correct_bool"]
     return {s: 100 * d["correct"] / d["total"] for s, d in per_shape.items()}
 
 
@@ -147,7 +152,8 @@ def main():
             row += f"{r**2:12.3f}"
         print(row)
 
-    print(f"\n(each cell is r^2 between the predictor and that subject's per-shape accuracy, n=11 shapes)")
+    print(f"\n(each cell is r^2 between the predictor and that subject's per-shape accuracy, n=11 shapes;"
+          f"\nClaude and Codex accuracy is averaged across their 10 independent runs each)")
 
 
 if __name__ == "__main__":
