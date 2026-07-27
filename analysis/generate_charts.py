@@ -10,10 +10,12 @@ first) and data/paper_source_data/.
 """
 import csv
 import json
+import sys
 from collections import defaultdict
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -21,6 +23,13 @@ DATA_DIR = REPO_ROOT / "data"
 OSF_DIR = DATA_DIR / "paper_source_data"
 CHARTS_DIR = REPO_ROOT / "charts"
 CHARTS_DIR.mkdir(exist_ok=True)
+
+sys.path.insert(0, str(REPO_ROOT / "stimulus_generation"))
+from shapes import build_shapes  # noqa: E402
+
+SOURCE_PAPER = ("Human and baboon data: Sablé-Meyer et al. (2021), PNAS 118(16) e2023123118, "
+                 "public data at osf.io/w5pzf.")
+SOURCE_PRAJA = "Claude and Codex data: PrajaAI."
 
 COLORS = {"human": "#0072B2", "baboon": "#D55E00", "claude": "#009E73", "codex": "#CC79A7"}
 LABELS = {"human": "Human", "baboon": "Baboon", "claude": "Claude (Sonnet 5)", "codex": "Codex (GPT-5.5)"}
@@ -91,11 +100,12 @@ ax.set_xlim(30, 100)
 ax.set_ylim(0, 0.9)
 ax.grid(True, alpha=0.25)
 ax.axhline(0.5, color="gray", linewidth=0.6, linestyle="--", alpha=0.5)
-fig.text(0.5, 0.01,
-         "Claude and Codex points show mean ± standard error across 10 independent 220-trial runs each on the same images.\n"
-         "Human (n=117) and baboon (n=20) points are single population estimates from the paper's own public data (osf.io/w5pzf).",
+fig.text(0.5, 0.045,
+         "Claude and Codex points show mean ± standard error across 10 independent 220-trial runs each on the same images.",
          ha="center", fontsize=8, color="gray", wrap=True)
-plt.tight_layout(rect=[0, 0.05, 1, 1])
+fig.text(0.5, 0.025, SOURCE_PAPER, ha="center", fontsize=7.5, color="gray")
+fig.text(0.5, 0.008, SOURCE_PRAJA, ha="center", fontsize=7.5, color="gray")
+plt.tight_layout(rect=[0, 0.08, 1, 1])
 plt.savefig(CHARTS_DIR / "img_quadrant.png", dpi=200)
 plt.close()
 
@@ -107,8 +117,20 @@ shape_labels = {
     "trapezoid": "trapezoid", "irregular": "irregular",
 }
 order_by_human = sorted(order, key=lambda s: -human_acc[s])
+shapes_geom = build_shapes()
 
-fig, ax = plt.subplots(figsize=(10.5, 6))
+
+def normalized_polygon_xy(name):
+    """Vertices centered on their own centroid and scaled to fit a unit box,
+    for drawing a small reference-shape icon under each x-axis tick."""
+    pts = np.array(shapes_geom[name]["vertices"], dtype=float)
+    pts = pts - pts.mean(axis=0)
+    scale = np.max(np.abs(pts)) or 1.0
+    return pts / scale
+
+fig, (ax, icon_ax) = plt.subplots(
+    2, 1, figsize=(10.5, 7), gridspec_kw={"height_ratios": [5, 1], "hspace": 0.05}, sharex=True
+)
 x = np.arange(len(order_by_human))
 series = {
     "human": [human_acc[s] for s in order_by_human],
@@ -126,16 +148,29 @@ for key in ["human", "baboon", "claude", "codex"]:
         yerr = np.array(errs[key])
         ax.fill_between(x, np.array(series[key]) - yerr, np.array(series[key]) + yerr, color=COLORS[key], alpha=0.15)
 
-ax.set_xticks(x)
-ax.set_xticklabels([shape_labels[s] for s in order_by_human], rotation=30, ha="right")
 ax.set_ylabel("Accuracy (%)", fontsize=12)
 ax.set_title("Accuracy by shape, sorted by human accuracy", fontsize=13, fontweight="bold")
 ax.legend(loc="lower left", fontsize=10)
 ax.grid(True, alpha=0.25)
 ax.set_ylim(0, 100)
-fig.text(0.5, 0.01, "Claude and Codex lines/bands show mean ± 1 SD across 10 independent runs each on the identical 220 trial images.",
+ax.tick_params(labelbottom=False)
+
+# reference-shape icons in place of text x-tick labels
+icon_ax.set_xlim(ax.get_xlim())
+icon_ax.set_ylim(-1.15, 1.15)
+icon_ax.axis("off")
+for xi, s in zip(x, order_by_human):
+    poly_xy = normalized_polygon_xy(s) * 0.42
+    poly_xy = poly_xy + np.array([xi, 0])
+    icon_ax.add_patch(Polygon(poly_xy, closed=True, facecolor="#dddddd", edgecolor="#444444", linewidth=1))
+    icon_ax.text(xi, -1.15, shape_labels[s], ha="center", va="top", fontsize=8.5, rotation=30,
+                 rotation_mode="anchor")
+
+fig.text(0.5, 0.05, "Claude and Codex lines/bands show mean ± 1 SD across 10 independent runs each on the identical 220 trial images.",
          ha="center", fontsize=8, color="gray")
-plt.tight_layout(rect=[0, 0.04, 1, 1])
+fig.text(0.5, 0.03, SOURCE_PAPER, ha="center", fontsize=7.5, color="gray")
+fig.text(0.5, 0.012, SOURCE_PRAJA, ha="center", fontsize=7.5, color="gray")
+plt.tight_layout(rect=[0, 0.09, 1, 1])
 plt.savefig(CHARTS_DIR / "img_four_lines.png", dpi=200)
 plt.close()
 
