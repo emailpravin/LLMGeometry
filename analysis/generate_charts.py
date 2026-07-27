@@ -121,19 +121,16 @@ shapes_geom = build_shapes()
 
 
 def normalized_polygon_xy(name):
-    """Vertices centered on their own centroid and scaled (uniformly, same
-    factor for x and y) to fit within a [-1, 1] box, preserving the shape's
-    true width:height ratio -- e.g. rectangle stays 1.5:1, square stays
-    1:1. Only draw these inside an axes with aspect='equal', otherwise a
-    non-square plotting box silently re-distorts them back toward
-    square, which is what happened in an earlier version of this chart."""
+    """Vertices centered on their own centroid and scaled to fit a unit box,
+    for drawing a small reference-shape icon under each x-axis tick."""
     pts = np.array(shapes_geom[name]["vertices"], dtype=float)
     pts = pts - pts.mean(axis=0)
     scale = np.max(np.abs(pts)) or 1.0
     return pts / scale
 
-
-fig, ax = plt.subplots(figsize=(10.5, 7.2))
+fig, (ax, icon_ax) = plt.subplots(
+    2, 1, figsize=(10.5, 7), gridspec_kw={"height_ratios": [5, 1], "hspace": 0.05}, sharex=True
+)
 x = np.arange(len(order_by_human))
 series = {
     "human": [human_acc[s] for s in order_by_human],
@@ -151,42 +148,45 @@ for key in ["human", "baboon", "claude", "codex"]:
         yerr = np.array(errs[key])
         ax.fill_between(x, np.array(series[key]) - yerr, np.array(series[key]) + yerr, color=COLORS[key], alpha=0.15)
 
-ax.set_xlim(-0.6, len(order_by_human) - 0.4)
 ax.set_ylabel("Accuracy (%)", fontsize=12)
 ax.set_title("Accuracy by shape, sorted by human accuracy", fontsize=13, fontweight="bold")
 ax.legend(loc="lower left", fontsize=10)
 ax.grid(True, alpha=0.25)
 ax.set_ylim(0, 100)
-ax.tick_params(labelbottom=False, bottom=False)
-for spine in ("top", "right"):
-    ax.spines[spine].set_visible(False)
+ax.tick_params(labelbottom=False)
 
-plt.tight_layout(rect=[0, 0.23, 1, 1])
-fig.canvas.draw()  # finalize axes position so transData -> transFigure is accurate
+# reference-shape icons in place of text x-tick labels
+icon_ax.set_xlim(ax.get_xlim())
+icon_ax.set_ylim(-1.15, 1.15)
+icon_ax.axis("off")
 
-fig_w_in, fig_h_in = fig.get_size_inches()
-icon_size_in = 0.62  # physical size, same in both dimensions -> guarantees square pixels
-icon_w_frac, icon_h_frac = icon_size_in / fig_w_in, icon_size_in / fig_h_in
-ax_bottom_frac = ax.get_position().y0
+plt.tight_layout(rect=[0, 0.09, 1, 1])
+fig.canvas.draw()  # finalize icon_ax's on-screen box so its pixel aspect can be measured
+
+# icon_ax's x and y data ranges are stretched to different physical sizes
+# (wide, short strip), so drawing a true-aspect polygon straight into its
+# data coordinates silently re-distorts it back toward square -- this is
+# what made the rectangle icon render as a square before. Correct for it
+# with one scale factor computed from the axes' actual on-screen box.
+bbox = icon_ax.get_window_extent()
+xr = icon_ax.get_xlim()[1] - icon_ax.get_xlim()[0]
+yr = icon_ax.get_ylim()[1] - icon_ax.get_ylim()[0]
+px_per_xunit = bbox.width / xr
+px_per_yunit = bbox.height / yr
+aspect_correction = px_per_yunit / px_per_xunit
 
 for xi, s in zip(x, order_by_human):
-    disp = ax.transData.transform((xi, ax.get_ylim()[0]))
-    fx, _ = fig.transFigure.inverted().transform(disp)
+    poly_xy = normalized_polygon_xy(s) * 0.42
+    poly_xy[:, 0] *= aspect_correction
+    poly_xy = poly_xy + np.array([xi, 0])
+    icon_ax.add_patch(Polygon(poly_xy, closed=True, facecolor="#dddddd", edgecolor="#444444", linewidth=1))
+    icon_ax.text(xi, -1.15, shape_labels[s], ha="center", va="top", fontsize=8.5, rotation=30,
+                 rotation_mode="anchor")
 
-    icon_ax = fig.add_axes([fx - icon_w_frac / 2, ax_bottom_frac - 0.028 - icon_h_frac, icon_w_frac, icon_h_frac])
-    icon_ax.set_xlim(-1, 1)
-    icon_ax.set_ylim(-1, 1)
-    icon_ax.set_aspect("equal")
-    icon_ax.axis("off")
-    icon_ax.add_patch(Polygon(normalized_polygon_xy(s), closed=True, facecolor="#dddddd", edgecolor="#444444", linewidth=1))
-
-    fig.text(fx, ax_bottom_frac - 0.045 - icon_h_frac, shape_labels[s], ha="right", va="top",
-              fontsize=8.5, rotation=30, rotation_mode="anchor")
-
-fig.text(0.5, 0.055, "Claude and Codex lines/bands show mean ± 1 SD across 10 independent runs each on the identical 220 trial images.",
+fig.text(0.5, 0.05, "Claude and Codex lines/bands show mean ± 1 SD across 10 independent runs each on the identical 220 trial images.",
          ha="center", fontsize=8, color="gray")
-fig.text(0.5, 0.035, SOURCE_PAPER, ha="center", fontsize=7.5, color="gray")
-fig.text(0.5, 0.015, SOURCE_PRAJA, ha="center", fontsize=7.5, color="gray")
+fig.text(0.5, 0.03, SOURCE_PAPER, ha="center", fontsize=7.5, color="gray")
+fig.text(0.5, 0.012, SOURCE_PRAJA, ha="center", fontsize=7.5, color="gray")
 plt.savefig(CHARTS_DIR / "img_four_lines.png", dpi=200)
 plt.close()
 
