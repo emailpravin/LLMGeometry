@@ -1,0 +1,12 @@
+shape,rightAngle,parallels,symmetry,equalSides,equalAngles
+square,4,2,5,4,4
+rectangle,4,2,3,2,4
+losange,0,0,3,4,2
+parallelogram,0,2,1,2,2
+rightKite,2,0,1,2,2
+kite,0,0,1,2,2
+isoTrapezoid,0,1,1,1,2
+hinge,1,0,0,1,0
+rustedHinge,0,0,0,1,0
+trapezoid,0,1,0,0,0
+random,0,0,0,0,0
