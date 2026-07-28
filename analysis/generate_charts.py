@@ -190,4 +190,78 @@ fig.text(0.5, 0.012, SOURCE_PRAJA, ha="center", fontsize=7.5, color="gray")
 plt.savefig(CHARTS_DIR / "img_four_lines.png", dpi=200)
 plt.close()
 
-print("Wrote charts/img_quadrant.png and charts/img_four_lines.png")
+# --------------------------------------------------------- claude vs codex scatter
+# Claude and Codex's per-shape accuracy correlates far more with each other
+# (r^2=0.86) than either correlates with the human curve (0.37 / 0.50), or
+# with the baboon curve (~0.00). Each point below is the actual reference
+# quadrilateral for that shape, not a generic dot, plotted at its own
+# (Claude accuracy, Codex accuracy) position.
+claude_vals = np.array([claude["per_shape_mean_accuracy"][s] for s in order])
+codex_vals = np.array([codex["per_shape_mean_accuracy"][s] for s in order])
+r_cc = np.corrcoef(claude_vals, codex_vals)[0, 1]
+fit_slope, fit_intercept = np.polyfit(claude_vals, codex_vals, 1)
+
+fig, ax = plt.subplots(figsize=(9.5, 9.5))
+lo, hi = 20, 105
+ax.plot([lo, hi], [lo, hi], "--", color="gray", linewidth=1, alpha=0.5, zorder=1, label="Equal accuracy (y = x)")
+fit_x = np.array([claude_vals.min() - 3, claude_vals.max() + 3])
+ax.plot(fit_x, fit_slope * fit_x + fit_intercept, "-", color=COLORS["codex"], linewidth=2, zorder=1,
+        label="Best fit across the 11 shapes")
+ax.legend(loc="lower left", fontsize=8.5, framealpha=0.9)
+ax.set_xlim(lo, hi)
+ax.set_ylim(lo, hi)
+ax.set_aspect("equal")
+ax.set_xlabel("Claude accuracy (%)", fontsize=12)
+ax.set_ylabel("Codex accuracy (%)", fontsize=12)
+ax.set_title("Claude and Codex agree with each other more than\neither agrees with humans", fontsize=13, fontweight="bold")
+ax.grid(True, alpha=0.25)
+ax.text(0.97, 0.06, f"r² = {r_cc**2:.2f}", transform=ax.transAxes, fontsize=14, fontweight="bold",
+        color="#444444", ha="right", bbox=dict(facecolor="white", edgecolor="#cccccc", boxstyle="round,pad=0.35"))
+ax.text(lo + 2, hi - 2, "Codex easier than Claude", fontsize=8, color="gray", va="top")
+ax.text(hi - 2, lo + 2, "Claude easier than Codex", fontsize=8, color="gray", ha="right", va="bottom")
+
+plt.tight_layout(rect=[0, 0.1, 1, 1])
+fig.canvas.draw()
+
+icon_size_in = 0.32
+fig_w_in, fig_h_in = fig.get_size_inches()
+icon_w_frac, icon_h_frac = icon_size_in / fig_w_in, icon_size_in / fig_h_in
+
+# manual label offsets (data units) to fan labels out of the dense
+# low-accuracy cluster (right_kite/kite/right_hinge/hinge/trapezoid/
+# irregular/iso_trapezoid all sit within a ~15-point box)
+label_offset = {
+    "square": (-10, 3), "rectangle": (2, -7),
+    "right_kite": (-9, -1), "kite": (0, -7),
+    "right_hinge": (-9, 1), "hinge": (8, 4),
+    "trapezoid": (-8, 5), "irregular": (9, -1),
+    "iso_trapezoid": (0, 7.5),
+}
+
+for s in order:
+    cx, cy = claude["per_shape_mean_accuracy"][s], codex["per_shape_mean_accuracy"][s]
+    disp = ax.transData.transform((cx, cy))
+    fx, fy = fig.transFigure.inverted().transform(disp)
+    icon_ax = fig.add_axes([fx - icon_w_frac / 2, fy - icon_h_frac / 2, icon_w_frac, icon_h_frac])
+    icon_ax.set_xlim(-1, 1)
+    icon_ax.set_ylim(-1, 1)
+    icon_ax.set_aspect("equal")
+    icon_ax.axis("off")
+    icon_ax.add_patch(Polygon(normalized_polygon_xy(s), closed=True, facecolor=COLORS["claude"],
+                               edgecolor="#222222", linewidth=1, alpha=0.8))
+
+    dx, dy = label_offset.get(s, (0, -6.5))
+    lx, ly = cx + dx, cy + dy
+    if (dx, dy) != (0, 0):
+        ax.plot([cx, lx], [cy, ly], color="#999999", linewidth=0.6, zorder=1)
+    ax.annotate(shape_labels[s], (lx, ly), fontsize=8, color="#333333",
+                ha="center", va="center", bbox=dict(facecolor="white", edgecolor="none", pad=0.5, alpha=0.85))
+
+fig.text(0.5, 0.045, "One point per shape: Claude's mean accuracy (n=10 runs) vs. Codex's mean accuracy (n=10 runs), same 220 trial images.",
+         ha="center", fontsize=8, color="gray")
+fig.text(0.5, 0.025, SOURCE_PAPER, ha="center", fontsize=7.5, color="gray")
+fig.text(0.5, 0.008, SOURCE_PRAJA, ha="center", fontsize=7.5, color="gray")
+plt.savefig(CHARTS_DIR / "img_claude_codex_scatter.png", dpi=200, bbox_inches=None)
+plt.close()
+
+print("Wrote charts/img_quadrant.png, charts/img_four_lines.png, and charts/img_claude_codex_scatter.png")
